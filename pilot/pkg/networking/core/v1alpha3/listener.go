@@ -145,6 +145,8 @@ const (
 
 	// Alpn HTTP filter name which will override the ALPN for upstream TLS connection.
 	AlpnFilterName = "istio.alpn"
+
+	OriginalSrc = "envoy.listener.original_src"
 )
 
 type FilterChainMatchOptions struct {
@@ -769,6 +771,9 @@ allChainsLabel:
 		})
 	}
 
+	if node.GetInterceptionMode() == model.InterceptionTproxy && features.EnableTProxyPreserveSourceIP {
+		listenerOpts.needOriginalSrc = true
+	}
 	// call plugins
 	l := buildListener(listenerOpts)
 	l.TrafficDirection = core.TrafficDirection_INBOUND
@@ -1759,6 +1764,7 @@ type buildListenerOpts struct {
 	bindToPort        bool
 	skipUserFilters   bool
 	needHTTPInspector bool
+	needOriginalSrc   bool
 }
 
 func buildHTTPConnectionManager(pluginParams *plugin.InputParams, httpOpts *httpListenerOpts,
@@ -1948,6 +1954,13 @@ func buildListener(opts buildListenerOpts) *xdsapi.Listener {
 	if opts.needHTTPInspector {
 		listenerFiltersMap[wellknown.HttpInspector] = true
 		listenerFilters = append(listenerFilters, &listener.ListenerFilter{Name: wellknown.HttpInspector})
+	}
+
+	if opts.needOriginalSrc {
+		listenerFiltersMap[OriginalSrc] = true
+		listenerFilters = append(listenerFilters, &listener.ListenerFilter{
+			Name: OriginalSrc,
+		})
 	}
 
 	for _, chain := range opts.filterChainOpts {
